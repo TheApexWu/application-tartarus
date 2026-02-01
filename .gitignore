@@ -1,0 +1,47 @@
+# === Secrets ===
+.env
+*.env
+.env.*
+
+# === Personal / PII ===
+USER.md
+MEMORY.md
+TOOLS.md
+IDENTITY.md
+SOUL.md
+AGENTS.md
+HEARTBEAT.md
+BOOTSTRAP.md
+CONTEXT_PRESERVATION.md
+memory/
+microsoft-roles.md
+
+# === Resume (contains PII: phone, email, address) ===
+resume/Alex_Wu_CV.yaml
+resume/output/
+resume/rendercv_output/
+resume/jd/
+resume/__pycache__/
+resume/.env
+
+# === Agent internals ===
+agents/
+sessions/
+canvas/
+
+# === Build artifacts ===
+__pycache__/
+*.pyc
+*.pyo
+node_modules/
+.DS_Store
+
+# === Misc personal ===
+*.html
+scripts/
+memory/*.json
+majikari-*.md
+majikari-*.html
+council-*.md
+aden-*.md
+website-*.html
