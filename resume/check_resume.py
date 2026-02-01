@@ -28,6 +28,8 @@ MAX_TITLE_CHARS = 95     # title + location before date column
 MAX_PAGE_LINES = 58      # approximate content lines per page
 
 RESUME_DIR = Path(__file__).parent
+RESUME_YAML = RESUME_DIR / "Alex_Wu_CV.yaml"
+RESUME_TEMPLATE = RESUME_DIR / "resume.example.yaml"
 
 
 # --- Issue tracking ---
@@ -154,7 +156,8 @@ def render(yaml_path):
 # --- Main ---
 def main():
     parser = argparse.ArgumentParser(description="Resume aesthetic checker (Tartustus)")
-    parser.add_argument("--yaml", default="Alex_Wu_CV.yaml", help="YAML to check")
+    default_yaml = str(RESUME_YAML if RESUME_YAML.exists() else RESUME_TEMPLATE)
+    parser.add_argument("--yaml", default=default_yaml, help="YAML to check")
     parser.add_argument("--all", action="store_true", help="Check base + all output variants")
     parser.add_argument("--no-render", action="store_true", help="Skip PDF rendering")
     args = parser.parse_args()

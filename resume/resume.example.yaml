@@ -1,0 +1,135 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rendercv/rendercv/refs/tags/v2.6/schema.json
+cv:
+  name: Your Name
+  email: you@example.com
+  phone: "+1 555 000 0000"
+  website: https://yoursite.com
+  social_networks:
+    - network: GitHub
+      username: YourGitHub
+    - network: LinkedIn
+      username: your-linkedin
+  sections:
+    education:
+      - institution: New York University
+        area: Computer Science & Data Science, Minor in Math
+        degree: BA
+        start_date: 2020-09
+        end_date: 2025-05
+        location: New York, NY
+        highlights: []
+    skills:
+      - label: Languages
+        details: "Python, SQL, R, JavaScript, Java, C++"
+      - label: ML/Stats
+        details: "PyTorch, TensorFlow, Scikit-Learn, Pandas, NumPy, Librosa, NLTK"
+      - label: Tools
+        details: "Git, GitHub, GCP, Azure, MongoDB, PostgreSQL, React/Next.js, Jupyter"
+    experience:
+      - company: Exiger LLC
+        position: Data Science Intern
+        start_date: 2025-06
+        end_date: 2025-08
+        location: New York, NY
+        highlights:
+          - Built and deployed NLP pipeline classifying support tickets by intent, sentiment, and topic using TF-IDF and logistic regression
+          - Developed priority scoring system predicting ticket urgency from historical resolution patterns, client metadata, and queue state
+          - Created time series forecasting tool predicting weekly/monthly ticket volume surges segmented by category, client, and tier
+          - Consolidated 130+ legacy ticket labels into 6-class taxonomy, improving downstream classification accuracy and resolution workflows
+          - Managed production deployment of ML models within enterprise ticketing infrastructure; coordinated integration testing and rollout
+      - company: Horizon Blue Cross Blue Shield NJ
+        position: IT Intern
+        start_date: 2023-06
+        end_date: 2023-08
+        location: Newark, NJ
+        highlights:
+          - Built front-end UI components for insurance catalog system using Salesforce and SQL, improving navigation and data accessibility
+          - Developed monitoring dashboard tracking microservice availability and automating open enrollment workflows
+          - Analyzed enrollment data patterns using SQL to identify bottlenecks in package selection workflows, informing product decisions
+          - Collaborated in Agile sprints using Confluence and Bitbucket for documentation and version control; ensured HIPAA compliance
+      - company: NYU Bobst Library – Endpoint Computing
+        position: Help Desk Support Assistant
+        start_date: 2022-06
+        end_date: 2025-05
+        location: New York, NY
+        highlights:
+          - Built internal web tools using JavaScript for library systems; managed endpoint imaging and networked printing infrastructure
+          - Resolved 500+ technical escalations via ServiceNow, troubleshooting hardware/software issues for faculty and students
+          - Administered endpoint imaging and deployment across 200+ library workstations; maintained print server and security protocols
+    projects:
+      - name: "[PsychohistoryML](https://yoursite.com) — ML on Civilizational Data"
+        start_date: 2025-09
+        end_date: present
+        highlights:
+          - Trained Random Forest and gradient boosting on 10,000 years of Seshat civilizational data (256 polities, 2M+ datapoints)
+          - Engineered 10 features from historical subsets spanning social complexity, warfare, technology adoption, and population scale
+          - "Achieved 0.67 AUC predicting instability; found complexity hurts pre-modern longevity but helps modern societies"
+          - Built full-stack Next.js app with D3.js visualizations and AI chatbot; published 8 notebooks, fully open source
+      - name: Audio Depression Detection — NYU Data Science Research
+        start_date: 2024-05
+        end_date: 2024-08
+        highlights:
+          - Collaborated on ML research analyzing 1,000 hours of patient audio to predict clinical depression indicators
+          - Built research pipeline handling audio preprocessing, speech-to-text transcription, feature extraction, and model training
+      - name: Music Transcription — NYU Deep Learning Final Project
+        start_date: 2025-02
+        end_date: 2025-05
+        highlights:
+          - Built end-to-end system converting piano audio to MIDI using PyTorch, librosa, and mel-spectrogram preprocessing
+          - Designed CRNN with dual-output heads for simultaneous note onset detection and duration prediction
+      - name: "[Majikari](https://github.com/YourGitHub/majikari-scraper) — Japanese Collectibles Intelligence"
+        start_date: 2026-01
+        end_date: present
+        highlights:
+          - Built async Python scraper collecting 5,000+ Mercari Japan listings with price stratification and checkpoint recovery
+          - Integrated Gemini Vision API for classification (0.94 confidence); built entity resolver with structural and semantic matching
+          - Scraped 7,374 Good Smile products; designed FAISS similarity search using multilingual-e5-small embeddings
+      - name: Touhou Compositional Analysis
+        start_date: 2025-12
+        end_date: present
+        highlights:
+          - Extracted 110+ audio features from 379 tracks across 19 games using librosa; analyzed 20 years of compositional evolution
+          - Found statistically significant tempo/spectral trends across eras; validated fan intuitions with quantitative analysis
+design:
+  theme: engineeringresumes
+  page:
+    size: us-letter
+    top_margin: 0.3in
+    bottom_margin: 0.3in
+    left_margin: 0.4in
+    right_margin: 0.4in
+    show_footer: false
+    show_top_note: false
+  typography:
+    line_spacing: 0.5em
+    font_family:
+      body: Times New Roman
+      name: Times New Roman
+      connections: Times New Roman
+      section_titles: Times New Roman
+    font_size:
+      body: 10pt
+      name: 25pt
+      connections: 10pt
+      section_titles: 1.3em
+  section_titles:
+    type: with_full_line
+    line_thickness: 0.5pt
+    space_above: 0.25cm
+    space_below: 0.12cm
+  sections:
+    space_between_regular_entries: 0.5em
+    space_between_text_based_entries: 0.2em
+  entries:
+    date_and_location_width: 3.8cm
+    highlights:
+      space_above: 0cm
+      space_between_items: 0.05cm
+      space_left: 0.15cm
+  header:
+    alignment: center
+    space_below_name: 0.1cm
+    space_below_connections: 0.1cm
+    connections:
+      separator: " | "
+      show_icons: false

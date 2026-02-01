@@ -11,12 +11,19 @@ Named after the Tartustus philosophy: if one thing changes, the whole page gets 
 pip install pyyaml httpx
 pip install rendercv          # PDF rendering (uses Typst under the hood)
 
-# 2. Tailor a resume
+# 2. Set up your resume (one-time)
+cp resume.example.yaml Alex_Wu_CV.yaml   # or whatever your name is
+# Edit Alex_Wu_CV.yaml with your real info (name, email, phone, etc.)
+# This file is gitignored — your PII never leaves your machine.
+
+# 3. Tailor a resume
 python tailor.py "Scale AI" "ML Engineer" jd/scaleai.txt
 
-# 3. Audit all resumes for overflow/aesthetics
+# 4. Audit all resumes for overflow/aesthetics
 python check_resume.py --all
 ```
+
+> **Privacy:** `resume.example.yaml` is the public template with placeholder data. Your real resume YAML is gitignored. The tools auto-detect your real file and fall back to the template if it doesn't exist.
 
 ## Dependencies
 
@@ -35,7 +42,8 @@ python check_resume.py --all
 
 ```
 resume/
-├── Alex_Wu_CV.yaml          # Base resume (source of truth)
+├── resume.example.yaml       # Template with placeholder PII (tracked)
+├── Alex_Wu_CV.yaml           # Your real resume (gitignored, never pushed)
 ├── tailor.py                 # Tailoring engine
 ├── check_resume.py           # Aesthetic auditor (Tartustus)
 ├── test_check_resume.py      # Edge case tests (32 tests)

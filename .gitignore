@@ -16,8 +16,9 @@ CONTEXT_PRESERVATION.md
 memory/
 microsoft-roles.md
 
-# === Resume (contains PII: phone, email, address) ===
-resume/Alex_Wu_CV.yaml
+# === Resume (real file contains PII — use resume.example.yaml as template) ===
+resume/*.yaml
+!resume/resume.example.yaml
 resume/output/
 resume/rendercv_output/
 resume/jd/
