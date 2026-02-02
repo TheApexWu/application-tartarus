@@ -1,0 +1,4 @@
+pyyaml>=6.0
+rendercv>=2.0
+pypdf>=4.0
+httpx>=0.25  # optional, for AI proofing

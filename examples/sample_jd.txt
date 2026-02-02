@@ -1,0 +1,19 @@
+Software Engineer - New Grad
+Acme Corp
+San Francisco, CA
+
+About the Role:
+We're looking for new grad software engineers to join our platform team.
+You'll build and maintain scalable web services used by millions of users.
+
+Requirements:
+- BS in Computer Science or equivalent
+- Strong fundamentals in data structures and algorithms
+- Proficiency in Python, Java, or Go
+- Experience with web frameworks (React, Django, Flask)
+- Familiarity with SQL and NoSQL databases
+
+Nice to have:
+- Experience with cloud platforms (AWS, GCP)
+- Contributions to open source
+- Interest in machine learning

@@ -1,0 +1,236 @@
+# Profile definitions for application-tartarus
+# Each profile defines how to tailor the resume for a category of roles.
+#
+# Skills are now dynamically selected from skills_inventory in resume_data.yaml.
+# `skill_buckets` defines the label + which categories to pull from + max items.
+# The actual skills are scored against the JD and top ones are picked.
+#
+# To customize: copy this file to profiles/custom.yaml and edit.
+
+ml:
+  keywords:
+    - machine learning
+    - ml engineer
+    - deep learning
+    - pytorch
+    - tensorflow
+    - model training
+    - neural network
+    - nlp
+    - computer vision
+    - llm
+    - ai
+  coursework: "Machine Learning, Deep Learning, Causal Inference, Predictive Analytics, Data Structures & Algorithms"
+  skill_buckets:
+    - label: Languages
+      categories: [lang]
+      max: 4
+    - label: ML & AI
+      categories: [ml]
+      max: 5
+    - label: Tools & Infra
+      categories: [data, web, infra]
+      max: 5
+  project_order:
+    - PsychohistoryML
+    - Audio Depression
+    - Music Transcription
+    - Majikari
+    - Touhou
+  experience_emphasis:
+    - nlp
+    - ml
+    - pipeline
+    - model
+    - classification
+    - prediction
+    - data
+
+swe:
+  keywords:
+    - software engineer
+    - full stack
+    - fullstack
+    - backend
+    - frontend
+    - web development
+    - api
+    - microservice
+    - react
+    - node
+    - typescript
+  coursework: "Data Structures & Algorithms, Object-Oriented Programming, Operating Systems, Computer Systems, Linear Algebra"
+  skill_buckets:
+    - label: Languages
+      categories: [lang]
+      max: 5
+    - label: Frameworks
+      categories: [web, ml]
+      max: 5
+    - label: Tools & Infra
+      categories: [infra, data]
+      max: 5
+  project_order:
+    - Majikari
+    - PsychohistoryML
+    - Music Transcription
+    - Touhou
+    - Audio Depression
+  experience_emphasis:
+    - built
+    - deployed
+    - frontend
+    - web
+    - api
+    - dashboard
+    - production
+    - system
+
+ds:
+  keywords:
+    - data scientist
+    - data science
+    - analytics
+    - statistical
+    - causal
+    - experimentation
+    - a/b test
+    - sql
+    - tableau
+    - insights
+  coursework: "Machine Learning, Deep Learning, Causal Inference, Predictive Analytics, Linear Algebra, Data Structures & Algorithms"
+  skill_buckets:
+    - label: Languages
+      categories: [lang]
+      max: 4
+    - label: ML & Data
+      categories: [ml, data]
+      max: 6
+    - label: Platforms
+      categories: [infra, web]
+      max: 4
+  project_order:
+    - PsychohistoryML
+    - Majikari
+    - Audio Depression
+    - Touhou
+    - Music Transcription
+  experience_emphasis:
+    - data
+    - analysis
+    - forecast
+    - pattern
+    - metric
+    - sql
+    - scoring
+    - predict
+
+research:
+  keywords:
+    - research engineer
+    - research scientist
+    - phd
+    - paper
+    - publication
+    - experiment
+    - novel
+    - state of the art
+    - benchmark
+  coursework: "Machine Learning, Deep Learning, Causal Inference, Predictive Analytics, Linear Algebra, Parallel Computing"
+  skill_buckets:
+    - label: Languages
+      categories: [lang]
+      max: 4
+    - label: ML & Research
+      categories: [ml, data]
+      max: 6
+    - label: Tools
+      categories: [infra, web]
+      max: 4
+  project_order:
+    - PsychohistoryML
+    - Audio Depression
+    - Music Transcription
+    - Touhou
+    - Majikari
+  experience_emphasis:
+    - research
+    - pipeline
+    - model
+    - feature
+    - evaluation
+    - ml
+    - classification
+
+it:
+  keywords:
+    - it support
+    - system admin
+    - helpdesk
+    - infrastructure
+    - devops
+    - sysadmin
+    - network
+    - security
+    - endpoint
+  coursework: "Data Structures & Algorithms, Operating Systems, Computer Systems Organization, Database Design, Linear Algebra"
+  skill_buckets:
+    - label: Languages
+      categories: [lang]
+      max: 5
+    - label: Platforms
+      categories: [infra, data]
+      max: 6
+    - label: Tools
+      categories: [web, ml]
+      max: 4
+  project_order:
+    - PsychohistoryML
+    - Majikari
+    - Music Transcription
+    - Touhou
+    - Audio Depression
+  experience_emphasis:
+    - support
+    - monitor
+    - deploy
+    - infrastructure
+    - ticket
+    - system
+    - agile
+    - compliance
+
+fdse:
+  keywords:
+    - forward deployed
+    - solutions engineer
+    - field engineer
+    - customer
+    - technical account
+    - implementation
+    - integration
+  coursework: "Data Structures & Algorithms, Machine Learning, Operating Systems, Database Design, Linear Algebra"
+  skill_buckets:
+    - label: Languages
+      categories: [lang]
+      max: 5
+    - label: Frameworks & ML
+      categories: [web, ml]
+      max: 5
+    - label: Tools & Infra
+      categories: [infra, data]
+      max: 5
+  project_order:
+    - PsychohistoryML
+    - Majikari
+    - Music Transcription
+    - Touhou
+    - Audio Depression
+  experience_emphasis:
+    - production
+    - deploy
+    - built
+    - integration
+    - dashboard
+    - coordinate
+    - workflow

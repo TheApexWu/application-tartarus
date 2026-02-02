@@ -1,0 +1,27 @@
+# Personal data
+resume_data.yaml
+.env
+
+# Generated output
+output/
+
+# Job descriptions (may contain proprietary info)
+jd/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+output/
+.env
