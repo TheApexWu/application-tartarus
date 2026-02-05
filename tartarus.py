@@ -318,6 +318,19 @@ def _render(out_dir, yaml_path, slug):
         capture_output=True, text=True, cwd=str(out_dir),
     )
 
+    # Post-process: strip bullet from Coursework line in typst, re-compile
+    render_out = out_dir / "rendercv_output"
+    if render_out.exists():
+        for typ_file in render_out.glob("*.typ"):
+            text = typ_file.read_text()
+            if "- Coursework:" in text:
+                text = text.replace("- Coursework:", "Coursework:")
+                typ_file.write_text(text)
+                subprocess.run(
+                    ["typst", "compile", str(typ_file)],
+                    capture_output=True, cwd=str(render_out),
+                )
+
     render_out = out_dir / "rendercv_output"
     if render_out.exists():
         for item in render_out.iterdir():
@@ -405,12 +418,13 @@ def tailor(company, role, jd, profile_override=None, use_ai=True):
 
     print(f"[{profile}] {company} — {role}")
 
-    # coursework
+    # coursework — rendered as highlight, bullet stripped post-render
     cw = prof.get("coursework")
-    if cw:
-        for edu in data["cv"]["sections"].get("education", []):
-            if edu.get("highlights"):
-                edu["highlights"] = [f"Coursework: {cw}"]
+    for edu in data["cv"]["sections"].get("education", []):
+        if cw:
+            edu["highlights"] = [f"Coursework: {cw}"]
+        else:
+            edu["highlights"] = []
 
     # skills — dynamic selection from inventory
     inventory = data.get("skills_inventory", [])
