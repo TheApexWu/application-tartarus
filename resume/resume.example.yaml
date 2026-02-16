@@ -57,7 +57,7 @@ cv:
           - Resolved 500+ technical escalations via ServiceNow, troubleshooting hardware/software issues for faculty and students
           - Administered endpoint imaging and deployment across 200+ library workstations; maintained print server and security protocols
     projects:
-      - name: "[PsychohistoryML](https://yoursite.com) — ML on Civilizational Data"
+      - name: "[PsychohistoryML](https://yoursite.com) - ML on Civilizational Data"
         start_date: 2025-09
         end_date: present
         highlights:
@@ -65,19 +65,19 @@ cv:
           - Engineered 10 features from historical subsets spanning social complexity, warfare, technology adoption, and population scale
           - "Achieved 0.67 AUC predicting instability; found complexity hurts pre-modern longevity but helps modern societies"
           - Built full-stack Next.js app with D3.js visualizations and AI chatbot; published 8 notebooks, fully open source
-      - name: Audio Depression Detection — NYU Data Science Research
+      - name: Audio Depression Detection - NYU Data Science Research
         start_date: 2024-05
         end_date: 2024-08
         highlights:
           - Collaborated on ML research analyzing 1,000 hours of patient audio to predict clinical depression indicators
           - Built research pipeline handling audio preprocessing, speech-to-text transcription, feature extraction, and model training
-      - name: Music Transcription — NYU Deep Learning Final Project
+      - name: Music Transcription - NYU Deep Learning Final Project
         start_date: 2025-02
         end_date: 2025-05
         highlights:
           - Built end-to-end system converting piano audio to MIDI using PyTorch, librosa, and mel-spectrogram preprocessing
           - Designed CRNN with dual-output heads for simultaneous note onset detection and duration prediction
-      - name: "[Majikari](https://github.com/YourGitHub/majikari-scraper) — Japanese Collectibles Intelligence"
+      - name: "[Majikari](https://github.com/YourGitHub/majikari-scraper) - Japanese Collectibles Intelligence"
         start_date: 2026-01
         end_date: present
         highlights:
@@ -115,16 +115,16 @@ design:
   section_titles:
     type: with_full_line
     line_thickness: 0.5pt
-    space_above: 0.25cm
-    space_below: 0.12cm
+    space_above: 0.4cm
+    space_below: 0.15cm
   sections:
-    space_between_regular_entries: 0.5em
-    space_between_text_based_entries: 0.2em
+    space_between_regular_entries: 0.8em
+    space_between_text_based_entries: 0.3em
   entries:
     date_and_location_width: 3.8cm
     highlights:
       space_above: 0cm
-      space_between_items: 0.05cm
+      space_between_items: 0.07cm
       space_left: 0.15cm
   header:
     alignment: center

@@ -3,6 +3,9 @@
 *.env
 .env.*
 
+# === Application tracking (PII) ===
+APPLICATIONS.md
+
 # === Personal / PII ===
 USER.md
 MEMORY.md
@@ -16,7 +19,10 @@ CONTEXT_PRESERVATION.md
 memory/
 microsoft-roles.md
 
-# === Resume (real file contains PII — use resume.example.yaml as template) ===
+# === Archive (contains PII - cover letters, old resumes) ===
+archive/
+
+# === Resume (real file contains PII - use resume.example.yaml as template) ===
 resume/*.yaml
 !resume/resume.example.yaml
 resume/output/
@@ -30,10 +36,17 @@ agents/
 sessions/
 canvas/
 
+# === Charon (automation) ===
+charon/jobs.db
+charon/__pycache__/
+charon/platforms/__pycache__/
+answers.yaml
+
 # === Build artifacts ===
 __pycache__/
 *.pyc
 *.pyo
+.venv/
 node_modules/
 .DS_Store
 

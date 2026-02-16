@@ -34,14 +34,16 @@ from datetime import datetime
 from copy import deepcopy
 
 BASE_DIR = Path(__file__).parent
-BASE_YAML = BASE_DIR / "Alex_Wu_CV.yaml"
+RESUME_DATA = BASE_DIR / "resume_data.yaml"
 TEMPLATE_YAML = BASE_DIR / "resume.example.yaml"
 OUTPUT_DIR = BASE_DIR / "output"
 JD_DIR = BASE_DIR / "jd"
 
-MAX_PAGES = 1  # Hard limit — resume MUST fit on one page
+MAX_PAGES = 1
+MAX_BULLET_CHARS = 135
 
-# ─── Profile Definitions ───────────────────────────────────────────────────
+
+# -- Profile Definitions ----------------------------------------------------
 
 PROFILES = {
     "ml": {
@@ -119,19 +121,25 @@ PROFILES = {
 }
 
 
-# ─── Helpers ────────────────────────────────────────────────────────────────
+# -- Helpers -----------------------------------------------------------------
 
 def slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
+def get_name_from_yaml(data: dict) -> str:
+    """Extract name from resume YAML for file naming."""
+    name = data.get("cv", {}).get("name", "Resume")
+    return re.sub(r"[^a-zA-Z0-9]+", "_", name).strip("_")
+
+
 def load_base():
-    yaml_path = BASE_YAML if BASE_YAML.exists() else TEMPLATE_YAML
+    yaml_path = RESUME_DATA if RESUME_DATA.exists() else TEMPLATE_YAML
     if not yaml_path.exists():
-        print("❌ No resume YAML found. Copy resume.example.yaml → Alex_Wu_CV.yaml and fill in your info.")
+        print("[error] No resume YAML found. Copy resume.example.yaml to resume_data.yaml and fill in your info.")
         sys.exit(1)
     if yaml_path == TEMPLATE_YAML:
-        print("⚠️  Using template (resume.example.yaml). Copy it to Alex_Wu_CV.yaml and add your real info.")
+        print("[warn] Using template. Copy resume.example.yaml to resume_data.yaml for real data.")
     with open(yaml_path) as f:
         return yaml.safe_load(f)
 
@@ -178,7 +186,7 @@ def match_project(project: dict, name_fragment: str) -> bool:
 def score_bullet(bullet: str, emphasis_keywords: list, jd_words: set = None) -> int:
     """Score a bullet by profile emphasis + JD word overlap."""
     b_lower = bullet.lower()
-    b_words = set(re.findall(r'[a-z]{3,}', b_lower))  # skip tiny words
+    b_words = set(re.findall(r'[a-z]{3,}', b_lower))
     score = sum(2 for kw in emphasis_keywords if kw in b_lower)
     if jd_words:
         stopwords = {"the", "and", "for", "with", "that", "this", "from", "have", "has",
@@ -198,29 +206,23 @@ def check_page_count(pdf_path: Path) -> int:
         return len(reader.pages)
     except ImportError:
         pass
-    # Fallback: count /Type /Page in raw PDF (rough but works)
     try:
         content = pdf_path.read_bytes()
-        # Look for /Type /Page (not /Pages)
         pages = len(re.findall(rb'/Type\s*/Page[^s]', content))
         return max(pages, 1)
     except Exception:
-        return -1  # unknown
+        return -1
 
 
-# ─── AI Text Proofing ──────────────────────────────────────────────────────
+# -- AI Text Proofing -------------------------------------------------------
 
 def ai_proof_bullets(data: dict, company: str, role: str, jd_text: str, profile: str) -> dict:
     """
-    Use Claude to lightly proof and sharpen resume bullets with company-aware context.
-    NOT a rewrite — just a pinch of polish:
-    - Fix grammar/typos
-    - Align phrasing to JD terminology where natural
-    - Add subtle company-relevant framing
+    Use Claude to lightly proof resume bullets with company-aware context.
+    Fix grammar, align to JD terminology, keep meaning intact.
     Returns modified data dict.
     """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
-    # Try .env file in project root
     if not api_key:
         env_file = BASE_DIR / ".env"
         if env_file.exists():
@@ -229,16 +231,15 @@ def ai_proof_bullets(data: dict, company: str, role: str, jd_text: str, profile:
                     api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
                     break
     if not api_key:
-        print("⚠️  No ANTHROPIC_API_KEY — skipping AI proofing (set in .env or environment)")
+        print("[warn] No ANTHROPIC_API_KEY set, skipping AI proofing")
         return data
 
     try:
         import httpx
     except ImportError:
-        print("⚠️  httpx not installed — skipping AI proofing (pip install httpx)")
+        print("[warn] httpx not installed, skipping AI proofing")
         return data
 
-    # Collect all bullets
     all_bullets = {}
     for section_name in ["experience", "projects"]:
         for i, entry in enumerate(data["cv"]["sections"].get(section_name, [])):
@@ -252,19 +253,19 @@ def ai_proof_bullets(data: dict, company: str, role: str, jd_text: str, profile:
     prompt = f"""You are proofing resume bullets for an application to {company} for the role: {role}.
 Profile type: {profile}
 
-Job description (for context — do NOT copy JD text into bullets):
+Job description (for context, do NOT copy JD text into bullets):
 ---
 {jd_text[:2000]}
 ---
 
 Here are the resume bullets. For each one, return a lightly edited version. Rules:
 1. Fix any grammar, spelling, or awkward phrasing
-2. Where natural, use terminology that mirrors the JD (e.g., if JD says "distributed systems" and bullet says "scalable backend", you can adjust — but only if it's honest)
-3. Keep the same meaning and metrics — do NOT invent numbers or claims
-4. Keep bullets concise (one line, under 150 chars ideally)
+2. Where natural, use terminology that mirrors the JD (only if honest)
+3. Keep the same meaning and metrics. Do NOT invent numbers or claims
+4. Keep bullets concise (one line, MUST be under 135 characters)
 5. DO NOT add fluff like "Spearheaded" or "Leveraged" if the original uses simpler verbs
 6. If a bullet is already good, return it unchanged
-7. Maintain a natural, confident tone — not corporate-speak
+7. Maintain a natural, confident tone
 
 Return ONLY a JSON object mapping each key to its edited bullet. No markdown, no explanation.
 
@@ -290,7 +291,6 @@ Bullets:
         result = resp.json()
         text = result["content"][0]["text"].strip()
 
-        # Parse JSON from response (handle markdown wrapping)
         if text.startswith("```"):
             text = re.sub(r'^```(?:json)?\n?', '', text)
             text = re.sub(r'\n?```$', '', text)
@@ -298,41 +298,50 @@ Bullets:
         edits = json.loads(text)
 
         changes = 0
+        diff_log = []
         for key, new_bullet in edits.items():
             if key in all_bullets and new_bullet != all_bullets[key]:
-                # Apply edit back to data
                 match = re.match(r'(\w+)\[(\d+)\]\.highlights\[(\d+)\]', key)
                 if match:
                     section, i, j = match.group(1), int(match.group(2)), int(match.group(3))
+                    old = all_bullets[key]
+                    diff_log.append({"key": key, "old": old, "new": new_bullet})
                     data["cv"]["sections"][section][i]["highlights"][j] = new_bullet
                     changes += 1
 
-        print(f"🤖 AI proofing: {changes} bullets refined")
+        if diff_log:
+            print(f"\n[ai] {changes} bullets refined")
+            print("-" * 72)
+            for d in diff_log:
+                print(f"  [{d['key']}]")
+                print(f"    OLD: {d['old']}")
+                print(f"    NEW: {d['new']}")
+                print()
+            print("-" * 72)
+            data["_ai_diffs"] = diff_log
+        else:
+            print("[ai] no changes needed")
+
         return data
 
     except Exception as e:
-        print(f"⚠️  AI proofing failed ({e}) — using original bullets")
+        print(f"[warn] AI proofing failed ({e}), using original bullets")
         return data
 
 
-# ─── Overflow Recovery ──────────────────────────────────────────────────────
+# -- Overflow Recovery -------------------------------------------------------
 
-def trim_to_fit(data: dict, out_dir: Path, tailored_yaml: Path, slug: str, max_attempts: int = 5) -> Path:
+def trim_to_fit(data: dict, out_dir: Path, tailored_yaml: Path, name_prefix: str,
+                slug: str, max_attempts: int = 5) -> Path:
     """
     Iteratively trim content until the resume fits on MAX_PAGES.
-    Strategy (in order):
-    1. Remove lowest-scored project
-    2. Remove last bullet from longest experience entry
-    3. Remove last project entirely
     """
     for attempt in range(max_attempts):
-        # Render
         result = subprocess.run(
             ["rendercv", "render", str(tailored_yaml)],
             capture_output=True, text=True, cwd=str(out_dir),
         )
 
-        # Move rendered files
         render_out = out_dir / "rendercv_output"
         if render_out.exists():
             for f in render_out.iterdir():
@@ -342,51 +351,52 @@ def trim_to_fit(data: dict, out_dir: Path, tailored_yaml: Path, slug: str, max_a
                 shutil.move(str(f), str(dest))
             render_out.rmdir()
 
-        # Rename PDF
-        pdf = out_dir / "Alex_Wu_CV.pdf"
-        final_pdf = out_dir / f"Alex_Wu_{slug}.pdf"
-        if pdf.exists():
+        # Find the rendered PDF (rendercv names it from the YAML name field)
+        rendered_pdfs = list(out_dir.glob("*.pdf"))
+        source_pdf = None
+        for p in rendered_pdfs:
+            if slug not in p.stem:
+                source_pdf = p
+                break
+
+        final_pdf = out_dir / f"{name_prefix}_{slug}.pdf"
+        if source_pdf and source_pdf.exists():
             if final_pdf.exists():
                 final_pdf.unlink()
-            pdf.rename(final_pdf)
+            source_pdf.rename(final_pdf)
 
         if not final_pdf.exists():
-            print(f"❌ RenderCV failed to produce PDF")
+            print("[error] RenderCV failed to produce PDF")
             if result.stderr:
-                print(f"   stderr: {result.stderr[:500]}")
+                print(f"  stderr: {result.stderr[:500]}")
             return final_pdf
 
-        # Check page count
         pages = check_page_count(final_pdf)
         if pages <= MAX_PAGES:
             return final_pdf
 
-        print(f"📐 Page overflow ({pages} pages) — trimming attempt {attempt + 1}...")
+        print(f"[trim] Page overflow ({pages} pages), attempt {attempt + 1}...")
 
-        # Trim strategy
         sections = data["cv"]["sections"]
 
-        # Strategy 1: Remove last bullet from longest experience entry
         exp = sections.get("experience", [])
         longest = max(exp, key=lambda e: len(e.get("highlights", [])), default=None)
         if longest and len(longest.get("highlights", [])) > 2:
             removed = longest["highlights"].pop()
-            print(f"   ✂️  Removed bullet from {longest.get('company', '?')}: \"{removed[:60]}...\"")
+            print(f"  Removed bullet from {longest.get('company', '?')}: \"{removed[:60]}...\"")
             with open(tailored_yaml, "w") as f:
                 yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False, width=200)
             continue
 
-        # Strategy 2: Remove last project
         projects = sections.get("projects", [])
         if len(projects) > 2:
             removed = projects.pop()
             pname = removed.get("name", "?")
-            print(f"   ✂️  Removed project: {pname[:60]}")
+            print(f"  Removed project: {pname[:60]}")
             with open(tailored_yaml, "w") as f:
                 yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False, width=200)
             continue
 
-        # Strategy 3: Remove bullet from any entry with >2 bullets
         for section_name in ["experience", "projects"]:
             for entry in sections.get(section_name, []):
                 if len(entry.get("highlights", [])) > 2:
@@ -398,26 +408,26 @@ def trim_to_fit(data: dict, out_dir: Path, tailored_yaml: Path, slug: str, max_a
                 continue
             break
         else:
-            print(f"❌ Cannot trim further — still {pages} pages. Manual intervention needed.")
+            print(f"[error] Cannot trim further, still {pages} pages.")
             return final_pdf
 
     return final_pdf
 
 
-# ─── Main Tailoring Logic ──────────────────────────────────────────────────
+# -- Main Tailoring Logic ----------------------------------------------------
 
 def tailor(company: str, role: str, jd: str, profile_override: str = None, use_ai: bool = True) -> Path:
     """Generate tailored resume, render, validate page count, store."""
     data = load_base()
     jd_text = read_jd(jd)
 
-    # Detect or use override
     profile = profile_override or detect_profile(jd_text, role)
     prof = PROFILES[profile]
     slug = slugify(company)
+    name_prefix = get_name_from_yaml(data)
 
-    print(f"📋 Detected profile: {profile}")
-    print(f"🏢 {company} — {role}")
+    print(f"[profile] {profile}")
+    print(f"[target]  {company} / {role}")
 
     # 1. Update coursework
     for edu in data["cv"]["sections"].get("education", []):
@@ -440,7 +450,7 @@ def tailor(company: str, role: str, jd: str, profile_override: str = None, use_a
             ordered.append(p)
     data["cv"]["sections"]["projects"] = ordered
 
-    # 4. Score and reorder experience bullets by relevance (profile + JD-aware)
+    # 4. Score and reorder experience bullets by relevance
     emphasis = prof["experience_emphasis"]
     jd_words = set(re.findall(r'[a-z]{3,}', jd_text.lower()))
     for job in data["cv"]["sections"].get("experience", []):
@@ -449,9 +459,23 @@ def tailor(company: str, role: str, jd: str, profile_override: str = None, use_a
             scored.sort(key=lambda x: x[0], reverse=True)
             job["highlights"] = [b for _, b in scored]
 
-    # 5. AI proofing (company-aware text refinement)
+    # 5. AI proofing
     if use_ai:
         data = ai_proof_bullets(data, company, role, jd_text, profile)
+
+    # 5b. Enforce bullet char limits
+    trimmed = 0
+    for section_name in ["experience", "projects"]:
+        for entry in data["cv"]["sections"].get(section_name, []):
+            for i, bullet in enumerate(entry.get("highlights", [])):
+                if len(bullet) > MAX_BULLET_CHARS:
+                    words = bullet[:MAX_BULLET_CHARS].rsplit(" ", 1)[0]
+                    words = words.rstrip(",;: ")
+                    entry["highlights"][i] = words
+                    trimmed += 1
+                    print(f"[trim] Bullet ({len(bullet)}->{len(words)} chars): {words[:60]}...")
+    if trimmed:
+        print(f"[trim] {trimmed} bullets capped at {MAX_BULLET_CHARS} chars")
 
     # 6. Create output directory
     out_dir = OUTPUT_DIR / slug
@@ -459,42 +483,73 @@ def tailor(company: str, role: str, jd: str, profile_override: str = None, use_a
         i = 2
         while (OUTPUT_DIR / f"{slug}-{i}").exists():
             i += 1
-        print(f"⚠️  {slug}/ already exists. Saving to {slug}-{i}/ (use --overwrite to replace)")
+        print(f"[warn] {slug}/ exists, saving to {slug}-{i}/ (use --overwrite to replace)")
         out_dir = OUTPUT_DIR / f"{slug}-{i}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # 7. Save JD for reference
+    # 7. Save JD
     jd_file = out_dir / "job_description.txt"
     jd_file.write_text(f"Company: {company}\nRole: {role}\nProfile: {profile}\nDate: {datetime.now().isoformat()}\n\n{jd_text}")
 
+    # 7b. Save AI diff log
+    ai_diffs = data.pop("_ai_diffs", None)
+    if ai_diffs:
+        diff_file = out_dir / "ai_changes.txt"
+        lines = [f"AI Proofing Changes: {company} / {role} / {profile}", f"Date: {datetime.now().isoformat()}", "=" * 72, ""]
+        for d in ai_diffs:
+            lines.append(f"[{d['key']}]")
+            lines.append(f"  OLD: {d['old']}")
+            lines.append(f"  NEW: {d['new']}")
+            lines.append("")
+        diff_file.write_text("\n".join(lines))
+        print(f"[log] AI diff: {diff_file}")
+
     # 8. Write tailored YAML
-    tailored_yaml = out_dir / "Alex_Wu_CV.yaml"
+    tailored_yaml = out_dir / "resume_data.yaml"
     with open(tailored_yaml, "w") as f:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False, width=200)
 
-    # 9. Render + page check (with auto-trim if overflow)
-    print("📄 Rendering PDF...")
-    final_pdf = trim_to_fit(data, out_dir, tailored_yaml, slug)
+    # 9. Render + page check
+    print("[render] generating PDF...")
+    final_pdf = trim_to_fit(data, out_dir, tailored_yaml, name_prefix, slug)
+
+    # 9b. Run aesthetic audit
+    try:
+        from check_resume import audit
+        issues = audit(tailored_yaml)
+        if issues:
+            errors = [i for i in issues if i.level == "error"]
+            warns = [i for i in issues if i.level == "warn"]
+            if errors or warns:
+                print(f"\n[audit] {len(errors)} errors, {len(warns)} warnings")
+                for issue in issues:
+                    if issue.level in ("error", "warn"):
+                        print(issue)
+                print()
+        else:
+            print("[audit] clean")
+    except ImportError:
+        pass
 
     # 10. Final page count validation
     if final_pdf.exists():
         pages = check_page_count(final_pdf)
         if pages > MAX_PAGES:
-            print(f"❌ FAILED: Resume is {pages} pages (max {MAX_PAGES}). Needs manual editing.")
+            print(f"[FAIL] Resume is {pages} pages (max {MAX_PAGES}). Needs manual editing.")
             sys.exit(1)
         elif pages == -1:
-            print(f"⚠️  Could not verify page count — check manually")
+            print("[warn] Could not verify page count, check manually")
         else:
-            print(f"✅ Page check: {pages} page(s)")
+            print(f"[ok] {pages} page(s)")
 
     # 11. Log
     log_file = OUTPUT_DIR / "generation_log.txt"
     with open(log_file, "a") as f:
         f.write(f"{datetime.now().isoformat()} | {company} | {role} | {profile} | {final_pdf}\n")
 
-    print(f"\n✅ Resume:       {final_pdf}")
-    print(f"✅ JD saved:     {jd_file}")
-    print(f"   Profile: {profile} | Company: {company} | Role: {role}")
+    print(f"\n[done] Resume: {final_pdf}")
+    print(f"[done] JD:     {jd_file}")
+    print(f"       Profile: {profile} | Company: {company} | Role: {role}")
 
     return final_pdf
 
@@ -503,7 +558,7 @@ def list_resumes():
     if not OUTPUT_DIR.exists():
         print("No resumes generated yet.")
         return
-    print(f"\n📁 Generated Resumes ({OUTPUT_DIR}):\n")
+    print(f"\nGenerated Resumes ({OUTPUT_DIR}):\n")
     for d in sorted(OUTPUT_DIR.iterdir()):
         if d.is_dir():
             pdfs = list(d.glob("*.pdf"))
@@ -518,16 +573,16 @@ def list_resumes():
                     size = p.stat().st_size // 1024
                     print(f"  {d.name}/")
                     print(f"    Resume: {p.name} ({size}KB) | Profile: {profile}")
-                    print(f"    JD: {'✅' if jd.exists() else '❌'}")
+                    print(f"    JD: {'yes' if jd.exists() else 'no'}")
                     print()
 
     log = OUTPUT_DIR / "generation_log.txt"
     if log.exists():
-        print(f"📋 Log: {log}")
+        print(f"Log: {log}")
 
 
 def show_profiles():
-    print("\n📊 Available Profiles:\n")
+    print("\nAvailable Profiles:\n")
     for name, prof in PROFILES.items():
         kws = ", ".join(prof["keywords"][:5])
         print(f"  {name:10s} | Keywords: {kws}...")
@@ -536,7 +591,7 @@ def show_profiles():
         print()
 
 
-# ─── CLI ────────────────────────────────────────────────────────────────────
+# -- CLI ---------------------------------------------------------------------
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -565,7 +620,6 @@ if __name__ == "__main__":
     role = sys.argv[2]
     jd = sys.argv[3]
 
-    # Parse flags
     profile_override = None
     use_ai = "--no-ai" not in sys.argv
     for i, arg in enumerate(sys.argv):

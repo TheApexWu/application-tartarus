@@ -1,196 +1,144 @@
 # application-tartarus
 
-Resume tailoring + aesthetic auditing system. Takes a job description, detects role type, reorders content, optionally AI-proofs bullets, renders a one-page PDF, and validates the output.
+Resume tailoring and automated job application system.
 
-Named after the Tartustus philosophy: if one thing changes, the whole page gets checked.
+**Tartarus** (`resume/`) generates tailored one-page PDFs from a YAML source. Profile detection picks the right emphasis for each role type. Bullet scoring ranks highlights by keyword overlap. AI proofing shows diffs before applying changes. Aesthetic enforcement catches overflows and page fill issues.
 
-## Quick start
+**Charon** (`charon/`) automates form filling across ATS platforms (Lever, Greenhouse, Ashby). Stealth browser automation with human-like delays and typing. Screening questions answered from a lookup table with AI fallback. SQLite job queue tracks every application from scraping through submission.
 
-```bash
-# 1. Install dependencies
-pip install pyyaml httpx
-pip install rendercv          # PDF rendering (uses Typst under the hood)
-
-# 2. Set up your resume (one-time)
-cp resume.example.yaml Alex_Wu_CV.yaml   # or whatever your name is
-# Edit Alex_Wu_CV.yaml with your real info (name, email, phone, etc.)
-# This file is gitignored — your PII never leaves your machine.
-
-# 3. Tailor a resume
-python tailor.py "Scale AI" "ML Engineer" jd/scaleai.txt
-
-# 4. Audit all resumes for overflow/aesthetics
-python check_resume.py --all
-```
-
-> **Privacy:** `resume.example.yaml` is the public template with placeholder data. Your real resume YAML is gitignored. The tools auto-detect your real file and fall back to the template if it doesn't exist.
-
-## Dependencies
-
-| Package | Required | What it does |
-|---------|----------|-------------|
-| `pyyaml` | ✅ | Parse/write resume YAML |
-| `rendercv` | ✅ | Render YAML → PDF via Typst |
-| `httpx` | Optional | AI bullet proofing (Claude API) |
-| `pypdf` | Optional | Page count verification (falls back to regex) |
-
-**API keys** (in `.env` or environment):
-- `ANTHROPIC_API_KEY` — for AI bullet proofing (optional, use `--no-ai` to skip)
-- `GEMINI_API_KEY` — for profile detection fallback (optional)
-
-## Files
-
-```
-resume/
-├── resume.example.yaml       # Template with placeholder PII (tracked)
-├── Alex_Wu_CV.yaml           # Your real resume (gitignored, never pushed)
-├── tailor.py                 # Tailoring engine
-├── check_resume.py           # Aesthetic auditor (Tartustus)
-├── test_check_resume.py      # Edge case tests (32 tests)
-├── .env                      # API keys (gitignored)
-├── jd/                       # Job descriptions (input)
-├── output/                   # Generated resumes (one dir per company)
-│   ├── anthropic/
-│   ├── google/
-│   ├── stripe/
-│   └── ...
-└── rendercv_output/          # Base resume render output
-```
-
-## Usage
-
-### Tailor a resume
+## Setup
 
 ```bash
-# Basic — auto-detects profile from JD
-python tailor.py "Company" "Role Title" "path/to/jd.txt"
+pip install pyyaml httpx pypdf rendercv
+pip install playwright && playwright install chromium
 
-# Force a specific profile
-python tailor.py "Palantir" "FDSE" jd/palantir.txt --profile fdse
+cd resume/
+cp resume.example.yaml resume_data.yaml
+# Edit resume_data.yaml with your info. This file is gitignored.
+```
 
-# Skip AI proofing (faster, no API key needed)
-python tailor.py "Stripe" "SWE" jd/stripe.txt --no-ai
+Set `ANTHROPIC_API_KEY` in `resume/.env` for AI proofing and free-text screening answers.
+
+## Tartarus (resume tailoring)
+
+```bash
+cd resume/
+
+# Tailor a resume
+python tailor.py "Company" "Role" jd/description.txt
+
+# Force a profile
+python tailor.py "Company" "Role" jd/description.txt --profile ml
+
+# Skip AI proofing
+python tailor.py "Company" "Role" jd/description.txt --no-ai
 
 # Overwrite existing output
-python tailor.py "Google" "ML Engineer" jd/google.txt --overwrite
+python tailor.py "Company" "Role" jd/description.txt --overwrite
 
-# Inline JD text (no file)
-python tailor.py "Startup" "Data Scientist" "We need someone who knows Python, ML..."
-```
+# List generated resumes
+python tailor.py list
 
-### Available profiles
-
-```bash
+# Show available profiles
 python tailor.py profiles
 ```
 
-| Profile | Triggers on | Skills emphasis |
-|---------|------------|----------------|
-| `ml` | machine learning, deep learning, pytorch, nlp, llm | ML/Stats stack |
-| `swe` | software engineer, full stack, react, api, backend | Frameworks + tools |
-| `ds` | data scientist, analytics, a/b test, sql, causal | ML/Data + viz |
-| `research` | research engineer, paper, benchmark, novel | ML/Data + LaTeX |
-| `it` | it support, sysadmin, infrastructure, devops | Platforms + ops |
-| `fdse` | forward deployed, solutions engineer, integration | Frameworks + APIs |
+### Profiles
 
-### List generated resumes
+| Profile | Triggers on | Emphasis |
+|---------|------------|----------|
+| `ml` | machine learning, pytorch, nlp, llm | ML/Stats |
+| `swe` | software engineer, full stack, react, backend | Frameworks + tools |
+| `ds` | data scientist, analytics, a/b test, sql | ML/Data + viz |
+| `research` | research engineer, paper, benchmark | ML/Data + LaTeX |
+| `it` | it support, sysadmin, infrastructure | Platforms + ops |
+| `fdse` | forward deployed, solutions engineer | Frameworks + APIs |
+
+### What the pipeline enforces
+
+1. AI proofing shows a full diff (OLD/NEW) before applying bullet changes
+2. Diffs saved to `output/<company>/ai_changes.txt`
+3. Bullets hard-capped at 135 characters
+4. Aesthetic audit runs after every generation
+5. PDF validated to exactly 1 page
+
+## Charon (automated applications)
 
 ```bash
-python tailor.py list
+# From repo root
+python -m charon.cli add "https://jobs.lever.co/company/id" -c "Company" -r "Role"
+python -m charon.cli queue
+python -m charon.cli approve 1
+python -m charon.cli run --dry-run
+python -m charon.cli run
+python -m charon.cli detect "https://boards.greenhouse.io/company/jobs/123"
+python -m charon.cli stats
 ```
 
-### Audit resumes (Tartustus)
+### Screening answers
+
+Edit `answers.yaml` at the repo root. Common questions (work auth, sponsorship, salary, years of experience, links) are answered from the lookup table. Free-text questions fall back to Claude Haiku.
+
+### Supported platforms
+
+| Platform | Status | Pattern |
+|----------|--------|---------|
+| Lever | Working | `jobs.lever.co/*` |
+| Greenhouse | Working | `boards.greenhouse.io/*` |
+| Ashby | Working | `jobs.ashbyhq.com/*` |
+| Workday | Planned | `*.myworkdayjobs.com/*` |
+
+## Auditor
 
 ```bash
-# Check base resume
-python check_resume.py
-
-# Check all variants
-python check_resume.py --all
-
-# Audit only (no PDF render)
-python check_resume.py --all --no-render
-
-# Check a specific file
-python check_resume.py --yaml output/google/Alex_Wu_CV.yaml
+cd resume/
+python check_resume.py              # check base resume
+python check_resume.py --all        # check all variants
+python check_resume.py --no-render  # audit only, skip PDF render
 ```
 
-**What it checks:**
-- Title line overflow (institution + degree + location vs page width)
-- Bullet point overflow (char count vs rendered line width)
-- Skills line overflow
-- Page fill (underfull = wasted space, overfull = risk of page 2)
+Thresholds calibrated against 10pt Times New Roman, US Letter, 0.4in margins, 3.8cm date column.
 
-Thresholds are empirically calibrated against the actual rendered PDF at 10pt Times New Roman, US Letter, 0.4in margins.
-
-## How tailoring works
-
-1. **Read JD** — from file or inline text
-2. **Detect profile** — keyword matching against JD + role title (or `--profile` override)
-3. **Swap skills** — each profile has its own skills section
-4. **Reorder projects** — profile-specific priority (e.g. ML profile leads with PsychohistoryML)
-5. **Score & reorder bullets** — each experience bullet is scored by keyword overlap with JD + profile emphasis words, then sorted highest-first
-6. **AI proofing** — Claude lightly edits bullets for grammar and JD terminology alignment (no invented claims)
-7. **Render** — RenderCV generates PDF via Typst
-8. **Page check** — must fit on 1 page; auto-trims if overflow (removes lowest-value bullets/projects)
-
-## Integration with Claude Code / coding agents
-
-The tools are plain Python scripts — any coding agent can call them:
+## Tests
 
 ```bash
-# In a Claude Code session or similar:
-cd ~/clawd/resume
-
-# Generate tailored resume for a specific job
-python tailor.py "Microsoft" "Data Scientist" jd/microsoft-ds.txt
-
-# Batch: loop over a job list
-for jd in jd/*.txt; do
-  company=$(basename "$jd" .txt)
-  python tailor.py "$company" "SWE" "$jd" --no-ai
-done
-
-# After any edits, audit everything
-python check_resume.py --all
-```
-
-### Integration with job lists (e.g. swe-list, Pitt CSC)
-
-If you have a repo of job postings with JDs:
-
-```bash
-# Example: iterate over a CSV/JSON of jobs
-python3 -c "
-import json, subprocess
-jobs = json.load(open('jobs.json'))
-for job in jobs:
-    subprocess.run([
-        'python', 'tailor.py',
-        job['company'], job['role'], job['jd_path'],
-        '--no-ai'
-    ])
-"
-
-# Then audit all generated resumes
-python check_resume.py --all --no-render
-```
-
-The output structure (`output/<company-slug>/`) keeps everything organized — each company gets its own directory with the tailored YAML, rendered PDF, and saved JD.
-
-## Running tests
-
-```bash
+cd resume/
 python test_check_resume.py
 ```
 
-32 tests covering: title builders, overflow detection, skills checks, page fill heuristics, integration with full YAML files, edge cases (empty YAML, missing sections, malformed data).
+## Structure
 
-## Design decisions
+```
+application-tartarus/
+  resume/
+    tailor.py              # tailoring engine
+    check_resume.py        # aesthetic auditor
+    test_check_resume.py   # unit tests
+    resume.example.yaml    # public template (tracked)
+    resume_data.yaml       # your resume (gitignored)
+    jd/                    # job descriptions
+    output/                # generated resumes per company
+  charon/
+    cli.py                 # CLI entry point
+    queue.py               # SQLite job queue
+    detector.py            # ATS platform detection
+    answers.py             # screening question engine
+    filler.py              # base form filler (Playwright)
+    stealth.py             # anti-detection layer
+    config.py              # settings
+    platforms/
+      lever.py             # Lever handler
+      greenhouse.py        # Greenhouse handler
+      ashby.py             # Ashby handler
+  answers.yaml             # screening answer lookup (gitignored)
+```
 
-- **YAML as source of truth** — not LaTeX, not JSON. RenderCV handles the rendering.
-- **Profiles over per-job rewrites** — 6 profiles cover the realistic job categories. Better than AI-rewriting the entire resume each time.
-- **Bullet scoring, not rewriting** — reordering existing honest bullets is safer than generating new ones.
-- **AI proofing is optional** — works without any API key (`--no-ai`). The AI step only polishes phrasing, never invents claims.
-- **One page, enforced** — `trim_to_fit` will iteratively cut content rather than produce a 2-page resume.
-- **Tartustus auditor is separate** — `check_resume.py` can run independently of `tailor.py`. Use it after manual edits too.
+## Dependencies
+
+| Package | Used by | Install |
+|---------|---------|---------|
+| pyyaml | Both | `pip install pyyaml` |
+| rendercv | Tartarus | `pip install rendercv` |
+| httpx | AI proofing | `pip install httpx` |
+| pypdf | Page count | `pip install pypdf` |
+| playwright | Charon | `pip install playwright && playwright install chromium` |

@@ -19,10 +19,10 @@ def check(name, condition):
     global PASS, FAIL
     if condition:
         PASS += 1
-        print(f"  ✅ {name}")
+        print(f"  [pass] {name}")
     else:
         FAIL += 1
-        print(f"  ❌ {name}")
+        print(f"  [fail] {name}")
 
 
 # --- Title builders ---
@@ -59,8 +59,8 @@ check("project: plain name", project_title({
 }) == "Cool Project")
 
 check("project: markdown link stripped", project_title({
-    "name": "[PsychohistoryML](https://example.com) — ML on Data"
-}) == "PsychohistoryML — ML on Data")
+    "name": "[PsychohistoryML](https://example.com) - ML on Data"
+}) == "PsychohistoryML - ML on Data")
 
 check("project: multiple links stripped", project_title({
     "name": "[A](http://a.com) and [B](http://b.com)"
@@ -217,12 +217,12 @@ finally:
 # --- Issue formatting ---
 print("\n--- Issue formatting ---")
 i = Issue("error", "Test > Entry", "Something broke")
-check("Issue.__str__ has icon", "🔴" in str(i))
+check("Issue.__str__ has icon", "[ERR]" in str(i))
 check("Issue.__str__ has where", "Test > Entry" in str(i))
 check("Issue.__str__ has what", "Something broke" in str(i))
 
 i2 = Issue("unknown_level", "X", "Y")
-check("Unknown level → fallback icon", "⚪" in str(i2))
+check("Unknown level - fallback icon", "[?]" in str(i2))
 
 
 # --- Summary ---

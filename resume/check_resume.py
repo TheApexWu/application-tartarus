@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Resume aesthetic checker — the Tartustus philosophy.
-One change → check the whole page.
+Resume aesthetic checker. One change, check the whole page.
 
 Usage:
     python check_resume.py                    # audit base resume + render
@@ -28,7 +27,7 @@ MAX_TITLE_CHARS = 95     # title + location before date column
 MAX_PAGE_LINES = 58      # approximate content lines per page
 
 RESUME_DIR = Path(__file__).parent
-RESUME_YAML = RESUME_DIR / "Alex_Wu_CV.yaml"
+RESUME_YAML = RESUME_DIR / "resume_data.yaml"
 RESUME_TEMPLATE = RESUME_DIR / "resume.example.yaml"
 
 
@@ -41,7 +40,7 @@ class Issue:
 
     @property
     def icon(self):
-        return {"error": "🔴", "warn": "🟡", "info": "🔵"}.get(self.level, "⚪")
+        return {"error": "[ERR]", "warn": "[WARN]", "info": "[INFO]"}.get(self.level, "[?]")
 
     def __str__(self):
         return f"  {self.icon} {self.where}\n     {self.what}"
@@ -104,8 +103,8 @@ def check_skills(entries, issues):
             ))
 
 
-def check_page_fill(sections, issues):
-    """Rough heuristic for page utilization."""
+def check_page_fill(sections, issues, design=None):
+    """Heuristic for page utilization, accounting for spacing."""
     n_bullets = sum(
         len(e.get("highlights") or [])
         for key in ("education", "experience", "projects")
@@ -115,13 +114,28 @@ def check_page_fill(sections, issues):
     n_skills = len(sections.get("skills", []))
     n_sections = 4  # education, skills, experience, projects headers
 
-    estimated = n_entries + n_bullets + n_skills + n_sections
+    # Account for spacing between entries (default 0.5em = ~0.5 lines)
+    entry_spacing = 0.5
+    section_spacing = 0.5
+    if design:
+        sec_cfg = design.get("sections", {})
+        st_cfg = design.get("section_titles", {})
+        # Parse em values
+        sbre = sec_cfg.get("space_between_regular_entries", "0.5em")
+        if isinstance(sbre, str) and sbre.endswith("em"):
+            entry_spacing = float(sbre[:-2])
+        sa = st_cfg.get("space_above", "0.25cm")
+        if isinstance(sa, str) and sa.endswith("cm"):
+            section_spacing = float(sa[:-2]) * 2.5  # rough cm to line conversion
+
+    spacing_lines = (n_entries - n_sections) * entry_spacing + n_sections * section_spacing
+    estimated = n_entries + n_bullets + n_skills + n_sections + spacing_lines
     fill = min(100, int(estimated / MAX_PAGE_LINES * 100))
 
     if fill < 75:
-        issues.append(Issue("info", "Layout", f"Page ~{fill}% full — room to add content"))
+        issues.append(Issue("info", "Layout", f"Page ~{fill}% full - room to add content"))
     elif fill > 98:
-        issues.append(Issue("warn", "Layout", f"Page ~{fill}% full — risk of page 2 overflow"))
+        issues.append(Issue("warn", "Layout", f"Page ~{fill}% full - risk of page 2 overflow"))
 
 
 def audit(yaml_path):
@@ -136,7 +150,8 @@ def audit(yaml_path):
     check_section(sections.get("experience", []), "Experience", experience_title, issues)
     check_section(sections.get("projects", []), "Projects", project_title, issues)
     check_skills(sections.get("skills", []), issues)
-    check_page_fill(sections, issues)
+    design = data.get("design", {})
+    check_page_fill(sections, issues, design)
 
     return issues
 
@@ -147,9 +162,9 @@ def render(yaml_path):
         capture_output=True, text=True, cwd=str(yaml_path.parent)
     )
     if result.returncode != 0:
-        print(f"  ❌ Render failed:\n{result.stderr}")
+        print(f"  [error] Render failed:\n{result.stderr}")
         return False
-    print(f"  ✅ Rendered")
+    print(f"  [ok] Rendered")
     return True
 
 
@@ -165,10 +180,10 @@ def main():
     # Collect files to check
     files = []
     if args.all:
-        base = RESUME_DIR / "Alex_Wu_CV.yaml"
+        base = RESUME_DIR / "resume_data.yaml"
         if base.exists():
             files.append(base)
-        for variant in sorted((RESUME_DIR / "output").glob("*/Alex_Wu_CV.yaml")):
+        for variant in sorted((RESUME_DIR / "output").glob("*/resume_data.yaml")):
             files.append(variant)
     else:
         p = Path(args.yaml)
@@ -178,7 +193,7 @@ def main():
     total_errors = 0
     for f in files:
         if not f.exists():
-            print(f"❌ Not found: {f}")
+            print(f"[error] Not found: {f}")
             continue
 
         name = f.parent.name if f.parent != RESUME_DIR else "base"
@@ -187,11 +202,11 @@ def main():
         total_errors += len(errors)
 
         if issues:
-            print(f"\n📋 {name} — {len(issues)} issue(s):")
+            print(f"\n[audit] {name} - {len(issues)} issue(s):")
             for issue in issues:
                 print(issue)
         else:
-            print(f"\n✅ {name} — clean")
+            print(f"\n[ok] {name} - clean")
 
         if not args.no_render:
             render(f)
