@@ -77,7 +77,7 @@ def detect(url: str, html: str = None) -> str:
 
 
 # Supported platforms (have form fillers implemented)
-SUPPORTED = {"lever", "greenhouse", "ashby"}
+SUPPORTED = {"lever", "greenhouse", "ashby", "workday"}
 
 
 def is_supported(platform: str) -> bool:

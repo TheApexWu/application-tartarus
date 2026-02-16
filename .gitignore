@@ -41,6 +41,7 @@ charon/jobs.db
 charon/__pycache__/
 charon/platforms/__pycache__/
 answers.yaml
+logs/
 
 # === Build artifacts ===
 __pycache__/

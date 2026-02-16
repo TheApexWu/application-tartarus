@@ -416,8 +416,10 @@ def trim_to_fit(data: dict, out_dir: Path, tailored_yaml: Path, name_prefix: str
 
 # -- Main Tailoring Logic ----------------------------------------------------
 
-def tailor(company: str, role: str, jd: str, profile_override: str = None, use_ai: bool = True) -> Path:
-    """Generate tailored resume, render, validate page count, store."""
+def tailor(company: str, role: str, jd: str, profile_override: str = None,
+           use_ai: bool = True, overwrite: bool = False) -> Path:
+    """Generate tailored resume, render, validate page count, store.
+    Returns path to the generated PDF, or None on failure."""
     data = load_base()
     jd_text = read_jd(jd)
 
@@ -479,7 +481,7 @@ def tailor(company: str, role: str, jd: str, profile_override: str = None, use_a
 
     # 6. Create output directory
     out_dir = OUTPUT_DIR / slug
-    if out_dir.exists() and "--overwrite" not in sys.argv:
+    if out_dir.exists() and not overwrite:
         i = 2
         while (OUTPUT_DIR / f"{slug}-{i}").exists():
             i += 1
@@ -536,7 +538,7 @@ def tailor(company: str, role: str, jd: str, profile_override: str = None, use_a
         pages = check_page_count(final_pdf)
         if pages > MAX_PAGES:
             print(f"[FAIL] Resume is {pages} pages (max {MAX_PAGES}). Needs manual editing.")
-            sys.exit(1)
+            return None
         elif pages == -1:
             print("[warn] Could not verify page count, check manually")
         else:
@@ -622,8 +624,11 @@ if __name__ == "__main__":
 
     profile_override = None
     use_ai = "--no-ai" not in sys.argv
+    overwrite = "--overwrite" in sys.argv
     for i, arg in enumerate(sys.argv):
         if arg == "--profile" and i + 1 < len(sys.argv):
             profile_override = sys.argv[i + 1]
 
-    tailor(company, role, jd, profile_override, use_ai)
+    result = tailor(company, role, jd, profile_override, use_ai, overwrite)
+    if result is None:
+        sys.exit(1)
