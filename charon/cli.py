@@ -8,11 +8,13 @@ Usage:
   python -m charon.cli approve <id>
   python -m charon.cli approve-all
   python -m charon.cli skip <id>
-  python -m charon.cli run [--dry-run] [--tailor]
-  python -m charon.cli run-one <id> [--dry-run] [--tailor]
+  python -m charon.cli run [--dry-run] [--tailor] [--submit]
+  python -m charon.cli run-one <id> [--dry-run] [--tailor] [--submit]
+  python -m charon.cli submit <id> [--tailor] [--force]
   python -m charon.cli detect <url>
   python -m charon.cli scrape <source> [--query QUERY]
   python -m charon.cli daemon [--interval SEC] [--install] [--uninstall]
+  python -m charon.cli dashboard [--port PORT]
   python -m charon.cli stats
 """
 
@@ -190,7 +192,8 @@ def cmd_detect(args):
         print(f"Supported platforms: {', '.join(sorted(SUPPORTED))}")
 
 
-async def _process_job(job: dict, dry_run: bool = False, do_tailor: bool = False):
+async def _process_job(job: dict, dry_run: bool = False, do_tailor: bool = False,
+                       do_submit: bool = False):
     """Process a single approved job through the pipeline."""
     platform = job.get("platform", "unknown")
     filler_cls = get_filler(platform)
@@ -233,9 +236,21 @@ async def _process_job(job: dict, dry_run: bool = False, do_tailor: bool = False
     try:
         result = await filler.run()
         if result.get("success"):
-            update_status(job["id"], "ready", resume_path=resume_path)
-            print(f"  Form filled. Review and submit manually.")
-            return True
+            if do_submit:
+                print(f"  Form filled. Submitting...")
+                submitted = await filler.submit()
+                if submitted:
+                    update_status(job["id"], "submitted", resume_path=resume_path)
+                    print(f"  Submitted.")
+                    return True
+                else:
+                    update_status(job["id"], "ready", resume_path=resume_path)
+                    print(f"  Fill OK but submit failed. Marked ready for manual review.")
+                    return False
+            else:
+                update_status(job["id"], "ready", resume_path=resume_path)
+                print(f"  Form filled. Review and submit manually.")
+                return True
         else:
             error = result.get("error", "Unknown")
             update_status(job["id"], "failed", error=error)
@@ -245,6 +260,8 @@ async def _process_job(job: dict, dry_run: bool = False, do_tailor: bool = False
         update_status(job["id"], "failed", error=str(e))
         print(f"  Failed: {e}")
         return False
+    finally:
+        await filler.cleanup()
 
 
 def cmd_run(args):
@@ -257,12 +274,13 @@ def cmd_run(args):
     print(f"Processing {len(jobs)} approved jobs...")
     dry_run = getattr(args, "dry_run", False)
     do_tailor = getattr(args, "tailor", False)
+    do_submit = getattr(args, "submit", False)
 
     async def run_all():
         results = {"success": 0, "failed": 0}
         for job in jobs:
             try:
-                ok = await _process_job(job, dry_run, do_tailor)
+                ok = await _process_job(job, dry_run, do_tailor, do_submit)
                 if ok:
                     results["success"] += 1
                 else:
@@ -273,7 +291,8 @@ def cmd_run(args):
         return results
 
     results = asyncio.run(run_all())
-    print(f"\nDone: {results['success']} filled, {results['failed']} failed")
+    action = "submitted" if do_submit else "filled"
+    print(f"\nDone: {results['success']} {action}, {results['failed']} failed")
 
 
 def cmd_run_one(args):
@@ -284,8 +303,29 @@ def cmd_run_one(args):
         return
     dry_run = getattr(args, "dry_run", False)
     do_tailor = getattr(args, "tailor", False)
+    do_submit = getattr(args, "submit", False)
 
-    asyncio.run(_process_job(job, dry_run, do_tailor))
+    asyncio.run(_process_job(job, dry_run, do_tailor, do_submit))
+
+
+def cmd_submit(args):
+    """Re-fill and submit a previously filled job."""
+    job = get_job(args.id)
+    if not job:
+        print(f"Job #{args.id} not found")
+        return
+
+    if job["status"] not in ("ready", "approved", "failed"):
+        print(f"Job #{args.id} has status '{job['status']}' - expected 'ready'")
+        if job["status"] == "submitted":
+            print("  Already submitted.")
+            return
+        print("  Use --force to override.")
+        if not getattr(args, "force", False):
+            return
+
+    do_tailor = getattr(args, "tailor", False)
+    asyncio.run(_process_job(job, dry_run=False, do_tailor=do_tailor, do_submit=True))
 
 
 def cmd_scrape(args):
@@ -325,6 +365,15 @@ def cmd_daemon(args):
     if getattr(args, "dry_run", False):
         sys.argv.append("--dry-run")
     daemon_main()
+
+
+def cmd_dashboard(args):
+    """Launch the review dashboard web server."""
+    import os
+    if hasattr(args, "port") and args.port:
+        os.environ["CHARON_DASHBOARD_PORT"] = str(args.port)
+    from charon.dashboard import main as dashboard_main
+    dashboard_main()
 
 
 def cmd_stats(args):
@@ -376,12 +425,20 @@ def main():
     p_run = sub.add_parser("run", help="Process approved jobs")
     p_run.add_argument("--dry-run", action="store_true", help="Don't actually fill forms")
     p_run.add_argument("--tailor", action="store_true", help="Auto-tailor resumes from JD before filling")
+    p_run.add_argument("--submit", action="store_true", help="Auto-submit after filling (no manual review)")
 
     # run-one
     p_one = sub.add_parser("run-one", help="Process single job")
     p_one.add_argument("id", type=int, help="Job ID")
     p_one.add_argument("--dry-run", action="store_true", help="Don't actually fill forms")
     p_one.add_argument("--tailor", action="store_true", help="Auto-tailor resume from JD")
+    p_one.add_argument("--submit", action="store_true", help="Auto-submit after filling")
+
+    # submit
+    p_submit = sub.add_parser("submit", help="Re-fill and submit a ready job")
+    p_submit.add_argument("id", type=int, help="Job ID")
+    p_submit.add_argument("--tailor", action="store_true", help="Re-tailor resume before submitting")
+    p_submit.add_argument("--force", action="store_true", help="Override status check")
 
     # scrape
     p_scrape = sub.add_parser("scrape", help="Scrape jobs from a source")
@@ -395,6 +452,10 @@ def main():
     p_daemon.add_argument("--dry-run", action="store_true", help="Don't fill forms")
     p_daemon.add_argument("--install", action="store_true", help="Install macOS launchd plist")
     p_daemon.add_argument("--uninstall", action="store_true", help="Remove macOS launchd plist")
+
+    # dashboard
+    p_dash = sub.add_parser("dashboard", help="Launch review dashboard")
+    p_dash.add_argument("--port", type=int, default=8080, help="Port (default: 8080)")
 
     # stats
     sub.add_parser("stats", help="Show stats")
@@ -410,8 +471,10 @@ def main():
         "detect": cmd_detect,
         "run": cmd_run,
         "run-one": cmd_run_one,
+        "submit": cmd_submit,
         "scrape": cmd_scrape,
         "daemon": cmd_daemon,
+        "dashboard": cmd_dashboard,
         "stats": cmd_stats,
     }
 

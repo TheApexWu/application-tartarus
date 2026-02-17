@@ -83,12 +83,20 @@ python -m charon.cli run --dry-run
 python -m charon.cli run
 python -m charon.cli run --tailor          # auto-tailor resume from JD before filling
 python -m charon.cli run-one 1 --tailor
+python -m charon.cli run --tailor --submit # fill AND submit (no manual review)
+
+# Submit after review
+python -m charon.cli submit 1              # re-fill and submit a ready job
+python -m charon.cli submit 1 --tailor     # re-tailor then submit
 
 # Scrape jobs from boards
 python -m charon.cli scrape lever:stripe
 python -m charon.cli scrape greenhouse:discord -q "engineer"
 python -m charon.cli scrape hn -q "ml"
-python -m charon.cli scrape wellfound -q "software engineer"
+
+# Review dashboard
+python -m charon.cli dashboard             # web UI at http://localhost:8080
+python -m charon.cli dashboard --port 9090
 
 # Daemon mode (continuous processing)
 python -m charon.cli daemon                    # process queue once
