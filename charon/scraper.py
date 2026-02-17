@@ -1,174 +1,225 @@
 """
-Job scraper. Feeds the queue from job boards and company career pages.
+Job scraper. Feeds the queue from job board APIs and web sources.
+
+All three major ATS platforms have public JSON APIs for their job boards.
+No browser needed, no selector guessing, no footer junk.
 
 Sources:
-- Lever company boards (jobs.lever.co/<company>)
-- Greenhouse company boards (boards.greenhouse.io/<company>)
-- Ashby company boards (jobs.ashbyhq.com/<company>)
-- HackerNews "Who's Hiring" monthly threads
-- Wellfound (formerly AngelList Talent)
+- Lever API (api.lever.co/v0/postings/<company>)
+- Greenhouse API (boards-api.greenhouse.io/v1/boards/<company>/jobs)
+- Ashby API (api.ashbyhq.com/posting-api/job-board/<company>)
+- HackerNews "Who's Hiring" (hn.algolia.com API)
 """
 
 import re
-import asyncio
+import html
 from datetime import datetime
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse
 
-from playwright.async_api import async_playwright
+try:
+    import httpx
+except ImportError:
+    httpx = None
 
 from .queue import add_job, get_db
-from .detector import detect_from_url, is_supported
-from .stealth import setup_stealth, human_delay
-from .config import USER_AGENT, PAGE_LOAD_WAIT_SEC
+from .detector import detect_from_url
 
 
-# -- ATS Board Scrapers --------------------------------------------------------
+def _require_httpx():
+    if httpx is None:
+        print("[error] httpx required for scraping: pip install httpx")
+        return False
+    return True
 
-async def scrape_lever_board(company_slug: str, role_filter: str = None) -> list:
-    """Scrape all jobs from a Lever company board."""
-    url = f"https://jobs.lever.co/{company_slug}"
+
+# -- Lever API -----------------------------------------------------------------
+
+def scrape_lever_board(company_slug: str, role_filter: str = None) -> list:
+    """Scrape all jobs from a Lever company board via their public API."""
+    if not _require_httpx():
+        return []
+
     jobs = []
+    url = f"https://api.lever.co/v0/postings/{company_slug}?mode=json"
 
-    async with await _get_browser() as browser:
-        page = await browser.new_page()
-        await page.goto(url, wait_until="networkidle", timeout=30000)
-        await human_delay(1, 2)
+    try:
+        resp = httpx.get(url, timeout=15)
+        if resp.status_code == 404:
+            # Try EU endpoint
+            resp = httpx.get(
+                f"https://api.eu.lever.co/v0/postings/{company_slug}?mode=json",
+                timeout=15,
+            )
+        resp.raise_for_status()
+        postings = resp.json()
 
-        postings = await page.query_selector_all(".posting")
-        for posting in postings:
-            try:
-                title_el = await posting.query_selector("h5, .posting-name")
-                link_el = await posting.query_selector("a.posting-title")
-                location_el = await posting.query_selector(".posting-categories .sort-by-location, .location")
+        if not isinstance(postings, list):
+            print(f"[warn] Unexpected Lever response for {company_slug}")
+            return []
 
-                title = (await title_el.inner_text()).strip() if title_el else ""
-                link = await link_el.get_attribute("href") if link_el else ""
-                location = (await location_el.inner_text()).strip() if location_el else ""
+        for p in postings:
+            title = p.get("text", "")
+            hosted_url = p.get("hostedUrl", "")
+            categories = p.get("categories", {})
+            location = categories.get("location", "")
+            team = categories.get("team", "")
+            commitment = categories.get("commitment", "")
 
-                if not link or not title:
-                    continue
-
-                if role_filter and role_filter.lower() not in title.lower():
-                    continue
-
-                jobs.append({
-                    "company": company_slug,
-                    "role": title,
-                    "url": link,
-                    "platform": "lever",
-                    "location": location,
-                })
-            except Exception:
+            if not title or not hosted_url:
                 continue
 
-        await browser.close()
+            if role_filter and role_filter.lower() not in title.lower():
+                continue
+
+            # Build JD text from available fields
+            jd_parts = []
+            if p.get("descriptionPlain"):
+                jd_parts.append(p["descriptionPlain"])
+            for lst in p.get("lists", []):
+                if lst.get("text"):
+                    jd_parts.append(lst["text"])
+                if lst.get("content"):
+                    jd_parts.append(_strip_html(lst["content"]))
+            if p.get("additionalPlain"):
+                jd_parts.append(p["additionalPlain"])
+
+            jd_text = "\n\n".join(jd_parts) if jd_parts else None
+
+            jobs.append({
+                "company": company_slug,
+                "role": title,
+                "url": hosted_url,
+                "platform": "lever",
+                "location": location,
+                "team": team,
+                "jd_text": jd_text,
+                "source": "lever_api",
+            })
+
+        print(f"[scrape] Lever/{company_slug}: {len(jobs)} jobs")
+
+    except Exception as e:
+        print(f"[error] Lever scrape failed for {company_slug}: {e}")
 
     return jobs
 
 
-async def scrape_greenhouse_board(company_slug: str, role_filter: str = None) -> list:
-    """Scrape all jobs from a Greenhouse company board."""
-    url = f"https://boards.greenhouse.io/{company_slug}"
+# -- Greenhouse API ------------------------------------------------------------
+
+def scrape_greenhouse_board(company_slug: str, role_filter: str = None) -> list:
+    """Scrape all jobs from a Greenhouse company board via their public API."""
+    if not _require_httpx():
+        return []
+
     jobs = []
+    url = f"https://boards-api.greenhouse.io/v1/boards/{company_slug}/jobs?content=true"
 
-    async with await _get_browser() as browser:
-        page = await browser.new_page()
-        await page.goto(url, wait_until="networkidle", timeout=30000)
-        await human_delay(1, 2)
+    try:
+        resp = httpx.get(url, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
 
-        openings = await page.query_selector_all(".opening")
-        for opening in openings:
-            try:
-                link_el = await opening.query_selector("a")
-                location_el = await opening.query_selector(".location")
+        for job in data.get("jobs", []):
+            title = job.get("title", "")
+            job_url = job.get("absolute_url", "")
+            location = job.get("location", {}).get("name", "")
+            departments = [d.get("name", "") for d in job.get("departments", [])]
+            content = job.get("content", "")
 
-                if not link_el:
-                    continue
-
-                title = (await link_el.inner_text()).strip()
-                href = await link_el.get_attribute("href")
-                location = (await location_el.inner_text()).strip() if location_el else ""
-
-                if not href:
-                    continue
-
-                full_url = urljoin(url, href)
-
-                if role_filter and role_filter.lower() not in title.lower():
-                    continue
-
-                jobs.append({
-                    "company": company_slug,
-                    "role": title,
-                    "url": full_url,
-                    "platform": "greenhouse",
-                    "location": location,
-                })
-            except Exception:
+            if not title or not job_url:
                 continue
 
-        await browser.close()
+            if role_filter and role_filter.lower() not in title.lower():
+                continue
+
+            jd_text = _strip_html(content) if content else None
+
+            jobs.append({
+                "company": company_slug,
+                "role": title,
+                "url": job_url,
+                "platform": "greenhouse",
+                "location": location,
+                "team": ", ".join(departments),
+                "jd_text": jd_text,
+                "source": "greenhouse_api",
+            })
+
+        print(f"[scrape] Greenhouse/{company_slug}: {len(jobs)} jobs")
+
+    except Exception as e:
+        print(f"[error] Greenhouse scrape failed for {company_slug}: {e}")
 
     return jobs
 
 
-async def scrape_ashby_board(company_slug: str, role_filter: str = None) -> list:
-    """Scrape all jobs from an Ashby company board."""
-    url = f"https://jobs.ashbyhq.com/{company_slug}"
+# -- Ashby API -----------------------------------------------------------------
+
+def scrape_ashby_board(company_slug: str, role_filter: str = None) -> list:
+    """Scrape all jobs from an Ashby company board via their public API."""
+    if not _require_httpx():
+        return []
+
     jobs = []
+    url = f"https://api.ashbyhq.com/posting-api/job-board/{company_slug}"
 
-    async with await _get_browser() as browser:
-        page = await browser.new_page()
-        await page.goto(url, wait_until="networkidle", timeout=30000)
-        # Ashby is React SPA, wait for job list to render
-        await human_delay(2, 4)
+    try:
+        resp = httpx.get(url, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
 
-        links = await page.query_selector_all("a[href*='/jobs/'], a[href*='ashbyhq.com']")
-        seen = set()
-        for link_el in links:
-            try:
-                href = await link_el.get_attribute("href")
-                title = (await link_el.inner_text()).strip()
+        for job in data.get("jobs", []):
+            title = job.get("title", "")
+            job_url = job.get("jobUrl", "")
+            location = job.get("location", "")
+            department = job.get("department", "")
+            team = job.get("team", "")
+            is_remote = job.get("isRemote", False)
+            employment_type = job.get("employmentType", "")
 
-                if not href or not title or href in seen:
-                    continue
-                if "/jobs/" not in href and "ashbyhq.com" not in href:
-                    continue
-                seen.add(href)
-
-                full_url = urljoin(url, href)
-
-                if role_filter and role_filter.lower() not in title.lower():
-                    continue
-
-                jobs.append({
-                    "company": company_slug,
-                    "role": title,
-                    "url": full_url,
-                    "platform": "ashby",
-                })
-            except Exception:
+            if not title or not job_url:
                 continue
 
-        await browser.close()
+            if role_filter and role_filter.lower() not in title.lower():
+                continue
+
+            jd_text = None
+            if job.get("descriptionPlain"):
+                jd_text = job["descriptionPlain"]
+            elif job.get("descriptionHtml"):
+                jd_text = _strip_html(job["descriptionHtml"])
+
+            loc_display = location
+            if is_remote:
+                loc_display = f"{location} (Remote)" if location else "Remote"
+
+            jobs.append({
+                "company": company_slug,
+                "role": title,
+                "url": job_url,
+                "platform": "ashby",
+                "location": loc_display,
+                "team": f"{department} / {team}" if department and team else (department or team),
+                "jd_text": jd_text,
+                "source": "ashby_api",
+            })
+
+        print(f"[scrape] Ashby/{company_slug}: {len(jobs)} jobs")
+
+    except Exception as e:
+        print(f"[error] Ashby scrape failed for {company_slug}: {e}")
 
     return jobs
 
 
 # -- HackerNews Who's Hiring --------------------------------------------------
 
-async def scrape_hn_whos_hiring(role_filter: str = None, max_items: int = 200) -> list:
-    """
-    Scrape the latest HN "Who's Hiring" thread.
-    Extracts company names, roles, and any application URLs.
-    """
-    jobs = []
+def scrape_hn_whos_hiring(role_filter: str = None, max_items: int = 200) -> list:
+    """Scrape the latest HN "Who's Hiring" thread via Algolia API."""
+    if not _require_httpx():
+        return []
 
-    try:
-        import httpx
-    except ImportError:
-        print("[error] httpx required for HN scraping: pip install httpx")
-        return jobs
+    jobs = []
 
     # Find the latest "Who's Hiring" thread
     search_url = "https://hn.algolia.com/api/v1/search_by_date"
@@ -187,10 +238,9 @@ async def scrape_hn_whos_hiring(role_filter: str = None, max_items: int = 200) -
             print("[warn] No Who's Hiring thread found")
             return jobs
 
-        # Get the most recent thread
         thread = data["hits"][0]
         thread_id = thread["objectID"]
-        print(f"[scrape] Found thread: {thread['title']} ({thread_id})")
+        print(f"[scrape] HN thread: {thread['title']} ({thread_id})")
 
         # Fetch comments
         item_url = f"https://hn.algolia.com/api/v1/items/{thread_id}"
@@ -199,17 +249,16 @@ async def scrape_hn_whos_hiring(role_filter: str = None, max_items: int = 200) -
         thread_data = resp.json()
 
         children = thread_data.get("children", [])[:max_items]
-        print(f"[scrape] Processing {len(children)} top-level comments")
+        print(f"[scrape] Processing {len(children)} comments")
 
         for comment in children:
             text = comment.get("text", "")
             if not text:
                 continue
 
-            # Parse the first line for company/role info
-            # HN format is usually: "Company Name | Role | Location | ..."
+            # HN format: "Company Name | Role | Location | ..."
             lines = text.replace("<p>", "\n").split("\n")
-            first_line = re.sub(r'<[^>]+>', '', lines[0]).strip()
+            first_line = _strip_html(lines[0]).strip()
 
             if not first_line or len(first_line) < 5:
                 continue
@@ -220,16 +269,19 @@ async def scrape_hn_whos_hiring(role_filter: str = None, max_items: int = 200) -
 
             company = parts[0]
             role_text = parts[1] if len(parts) > 1 else ""
+            location = parts[2] if len(parts) > 2 else ""
 
             if role_filter and role_filter.lower() not in role_text.lower():
                 continue
 
-            # Extract URLs from the comment
+            # Extract job application URLs
             urls = re.findall(r'href="(https?://[^"]+)"', text)
-            # Filter for job application URLs
             apply_url = ""
             for u in urls:
-                if any(kw in u.lower() for kw in ["lever", "greenhouse", "ashby", "careers", "jobs", "apply", "workday"]):
+                if any(kw in u.lower() for kw in [
+                    "lever", "greenhouse", "ashby", "careers", "jobs",
+                    "apply", "workday", "hire", "recruiting"
+                ]):
                     apply_url = u
                     break
             if not apply_url and urls:
@@ -240,13 +292,20 @@ async def scrape_hn_whos_hiring(role_filter: str = None, max_items: int = 200) -
 
             platform = detect_from_url(apply_url)
 
+            # Build JD from the full comment text
+            jd_text = _strip_html(text)
+
             jobs.append({
                 "company": company[:50],
                 "role": role_text[:100],
                 "url": apply_url,
                 "platform": platform,
+                "location": location[:50],
+                "jd_text": jd_text,
                 "source": "hackernews",
             })
+
+        print(f"[scrape] HN: {len(jobs)} jobs extracted")
 
     except Exception as e:
         print(f"[error] HN scraping failed: {e}")
@@ -254,94 +313,18 @@ async def scrape_hn_whos_hiring(role_filter: str = None, max_items: int = 200) -
     return jobs
 
 
-# -- Wellfound (AngelList) -----------------------------------------------------
-
-async def scrape_wellfound(role_query: str = "software engineer",
-                           location: str = "United States",
-                           max_pages: int = 3) -> list:
-    """Scrape Wellfound job listings."""
-    jobs = []
-
-    async with await _get_browser() as browser:
-        page = await browser.new_page()
-        base_url = f"https://wellfound.com/role/l/{_wellfound_slug(role_query)}/{_wellfound_slug(location)}"
-
-        for page_num in range(1, max_pages + 1):
-            url = base_url if page_num == 1 else f"{base_url}?page={page_num}"
-            print(f"[scrape] Wellfound page {page_num}: {url}")
-
-            try:
-                await page.goto(url, wait_until="networkidle", timeout=30000)
-                await human_delay(2, 4)
-
-                # Wellfound uses React, look for job cards
-                cards = await page.query_selector_all("[class*='jobCard'], [class*='job-card'], [data-test='startup-list-item']")
-                if not cards:
-                    # Try broader selectors
-                    cards = await page.query_selector_all("a[href*='/jobs/']")
-
-                if not cards:
-                    print(f"[warn] No jobs found on page {page_num}")
-                    break
-
-                for card in cards:
-                    try:
-                        href = await card.get_attribute("href")
-                        if not href:
-                            link = await card.query_selector("a[href*='/jobs/']")
-                            href = await link.get_attribute("href") if link else None
-
-                        if not href:
-                            continue
-
-                        full_url = urljoin("https://wellfound.com", href)
-
-                        # Get text content for company/role
-                        text = (await card.inner_text()).strip()
-                        text_lines = [l.strip() for l in text.split("\n") if l.strip()]
-
-                        company = text_lines[0] if text_lines else "Unknown"
-                        role = text_lines[1] if len(text_lines) > 1 else role_query
-
-                        jobs.append({
-                            "company": company[:50],
-                            "role": role[:100],
-                            "url": full_url,
-                            "platform": "wellfound",
-                            "source": "wellfound",
-                        })
-                    except Exception:
-                        continue
-
-                await human_delay(3, 6)
-
-            except Exception as e:
-                print(f"[error] Wellfound page {page_num}: {e}")
-                break
-
-        await browser.close()
-
-    return jobs
-
-
 # -- Helpers -------------------------------------------------------------------
 
-def _wellfound_slug(text: str) -> str:
-    return re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
-
-
-async def _get_browser():
-    """Get a stealth browser instance."""
-    pw = await async_playwright().start()
-    browser = await pw.chromium.launch(
-        headless=True,
-        args=[
-            "--disable-blink-features=AutomationControlled",
-            "--no-first-run",
-            "--no-default-browser-check",
-        ],
-    )
-    return browser
+def _strip_html(text: str) -> str:
+    """Remove HTML tags and decode entities."""
+    text = re.sub(r'<br\s*/?>', '\n', text)
+    text = re.sub(r'<li>', '\n- ', text)
+    text = re.sub(r'<p>', '\n\n', text)
+    text = re.sub(r'<[^>]+>', '', text)
+    text = html.unescape(text)
+    # Collapse multiple blank lines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
 
 
 def add_scraped_jobs(jobs: list, source: str = "scraper") -> dict:
@@ -365,33 +348,30 @@ def add_scraped_jobs(jobs: list, source: str = "scraper") -> dict:
 
 # -- Public API ----------------------------------------------------------------
 
-async def scrape(source: str, query: str = None, **kwargs) -> list:
+def scrape(source: str, query: str = None, **kwargs) -> list:
     """
-    Main scrape dispatcher.
+    Main scrape dispatcher. All scrapers use HTTP APIs, no browser needed.
 
     Sources:
-      lever:<company>     - Scrape a Lever company board
-      greenhouse:<company> - Scrape a Greenhouse company board
-      ashby:<company>     - Scrape an Ashby company board
-      hn                  - Scrape latest HN Who's Hiring
-      wellfound           - Scrape Wellfound listings
+      lever:<company>      - Lever job board API
+      greenhouse:<company>  - Greenhouse job board API
+      ashby:<company>      - Ashby job board API
+      hn                   - HackerNews Who's Hiring (Algolia API)
 
     query: optional role filter (e.g. "software engineer", "ml")
     """
     if source.startswith("lever:"):
         company = source.split(":", 1)[1]
-        return await scrape_lever_board(company, query)
+        return scrape_lever_board(company, query)
     elif source.startswith("greenhouse:"):
         company = source.split(":", 1)[1]
-        return await scrape_greenhouse_board(company, query)
+        return scrape_greenhouse_board(company, query)
     elif source.startswith("ashby:"):
         company = source.split(":", 1)[1]
-        return await scrape_ashby_board(company, query)
+        return scrape_ashby_board(company, query)
     elif source == "hn":
-        return await scrape_hn_whos_hiring(query)
-    elif source == "wellfound":
-        return await scrape_wellfound(query or "software engineer", **kwargs)
+        return scrape_hn_whos_hiring(query)
     else:
         print(f"[error] Unknown source: {source}")
-        print("  Available: lever:<company>, greenhouse:<company>, ashby:<company>, hn, wellfound")
+        print("  Available: lever:<company>, greenhouse:<company>, ashby:<company>, hn")
         return []

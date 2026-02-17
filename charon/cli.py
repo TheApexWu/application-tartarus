@@ -296,7 +296,7 @@ def cmd_scrape(args):
     query = getattr(args, "query", None)
 
     print(f"Scraping: {source}" + (f" (filter: {query})" if query else ""))
-    jobs = asyncio.run(scrape(source, query))
+    jobs = scrape(source, query)
 
     if not jobs:
         print("No jobs found.")
