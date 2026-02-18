@@ -1,0 +1,53 @@
+# Auto-apply configuration
+
+targets:
+ daily_limit: 35
+ sources:
+ - simplify-swe-list # ~/Documents/GitHub/New-Grad-Positions
+ - handshake # easy apply + external, <3 weeks old
+ - greenhouse # direct board scraping
+
+roles:
+ include:
+ - data analyst
+ - junior developer
+ - junior software engineer
+ - data scientist
+ - research engineer
+ - associate software engineer
+ - entry level
+ - new grad
+ - early career
+ exclude:
+ - senior
+ - staff
+ - principal
+ - lead
+ - manager
+ - director
+ - PhD required
+ - 5+ years
+
+salary:
+ strategy: |
+ 1. Use exact amount from JD if stated
+ 2. If range given, use 33rd percentile or higher
+ 3. If no info, default to $80,000/year
+ default: "80000"
+
+resume:
+ tailor: true # use tartarus to customize per company
+ audit: true # verify before upload
+ base_path: ~/application-tartarus/resume/output/
+
+cover_letter:
+ required: true
+ style: |
+ - Concise, 3-4 short paragraphs max
+ - No exclamation points
+ - No "I am excited" / "I am passionate" / "I am thrilled"
+ - No em-dashes or fancy punctuation
+ - Direct, professional, human tone
+ - Specific to the role, not generic
+
+auto_submit: true

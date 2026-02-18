@@ -1,0 +1,9 @@
+I am applying for the [ROLE] position at [COMPANY].
+
+I recently graduated from NYU with degrees in Computer Science and Data Science. My main project is Majikari, a price comparison tool for Japanese collectibles that serves real users and handles bilingual data pipelines. I have also built ML projects analyzing historical datasets and NLP work comparing translation quality across texts.
+
+I am looking for my first full-time role where I can contribute meaningfully from day one. I am based in the NYC area and open to relocation.
+
+Thank you for your consideration.
+
+Alex Wu
